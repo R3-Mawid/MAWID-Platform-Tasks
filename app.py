@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import smtplib
 import os
+import pytz
 from email.mime.text import MIMEText
 
 # --- 1. قائمة الإيميلات ---
@@ -64,7 +65,11 @@ with st.expander("➕ إضافة مهمة جديدة"):
         
         if st.form_submit_button("حفظ وإرسال التنبيهات"):
             if t_name:
-                now = datetime.datetime.now()
+                # ضبط التوقيت على مكة المكرمة
+KSA = pytz.timezone('Asia/Riyadh')
+now = datetime.datetime.now(KSA)
+current_date = now.date()
+current_time = now.strftime("%I:%M:%S %p") # سيعطيك الوقت بنظام 12 ساعة (AM/PM)
                 new_row = {
                     "المهمة": t_name, 
                     "المسؤول": t_member, 
@@ -103,7 +108,11 @@ if not df.empty:
     )
     
     if st.button("تحديث وحفظ الحالات"):
-        now = datetime.datetime.now()
+        # ضبط التوقيت على مكة المكرمة
+KSA = pytz.timezone('Asia/Riyadh')
+now = datetime.datetime.now(KSA)
+current_date = now.date()
+current_time = now.strftime("%I:%M:%S %p") # سيعطيك الوقت بنظام 12 ساعة (AM/PM)
         for index, row in edited_df.iterrows():
             if row["الحالة"] == "مكتمل" and row["تاريخ الإنجاز الفعلي"] == "":
                 edited_df.at[index, "تاريخ الإنجاز الفعلي"] = str(now.date())
@@ -129,5 +138,6 @@ if st.session_state.user_email == "r3-mawid@gmail.com":
                 st.rerun()
     
     st.sidebar.download_button("📥 تحميل النسخة الاحتياطية", df.to_csv(index=False).encode('utf-8-sig'), f"mawid_tasks_{datetime.date.today()}.csv")
+
 
 

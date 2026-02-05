@@ -19,7 +19,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 دخول نظام موعد")
+    st.title("🔐 صفحة تسحيل الدخول لمهام إدارة موعد")
     u_email = st.text_input("أدخل بريدك الإلكتروني:")
     if st.button("دخول"):
         if u_email.lower() in [e.lower() for e in EMAILS_MAP.values()]:
@@ -48,7 +48,7 @@ def save_data(df_to_save):
     df_to_save.to_csv(DB_FILE, index=False)
 
 # --- 4. واجهة التطبيق ---
-st.title("🩻 نظام إدارة مهام برنامج موعد")
+st.title(" نظام إدارة مهام برنامج موعد")
 df = load_data()
 
 # نموذج الإضافة المطور
@@ -129,3 +129,4 @@ if st.session_state.user_email == "r3-mawid@gmail.com":
                 st.rerun()
     
     st.sidebar.download_button("📥 تحميل النسخة الاحتياطية", df.to_csv(index=False).encode('utf-8-sig'), f"mawid_tasks_{datetime.date.today()}.csv")
+

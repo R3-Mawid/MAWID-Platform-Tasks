@@ -19,7 +19,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 صفحة تسحيل الدخول لمهام إدارة موعد")
+    st.title("🔐 صفحة تسجيل الدخول لمهام إدارة موعد")
     u_email = st.text_input("أدخل بريدك الإلكتروني:")
     if st.button("دخول"):
         if u_email.lower() in [e.lower() for e in EMAILS_MAP.values()]:
@@ -129,4 +129,5 @@ if st.session_state.user_email == "r3-mawid@gmail.com":
                 st.rerun()
     
     st.sidebar.download_button("📥 تحميل النسخة الاحتياطية", df.to_csv(index=False).encode('utf-8-sig'), f"mawid_tasks_{datetime.date.today()}.csv")
+
 

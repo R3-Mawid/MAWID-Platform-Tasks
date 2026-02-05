@@ -30,11 +30,12 @@ if not st.session_state.authenticated:
             st.error("البريد غير مسجل.")
     st.stop()
 
-# --- 3. إدارة البيانات ---
+# --- 3. إدارة البيانات (هيكل نظيف بدون تكرار) ---
 DB_FILE = "radiology_tasks.csv"
+# الأعمدة الأساسية فقط
 COLUMNS = [
-    "المهمة", "المسؤول", "تاريخ التسجيل", "وقت الإدخال", 
-    "الأيام المتوقعة", "تاريخ الإنجاز المتوقع", "الحالة",
+    "المهمة", "المسؤول", "تاريخ البدء", "وقت البدء", 
+    "الأيام المتوقعة", "الموعد النهائي", "الحالة",
     "تاريخ الإنجاز الفعلي", "وقت الإنجاز الفعلي"
 ]
 
@@ -43,6 +44,7 @@ if not os.path.exists(DB_FILE):
     df_init.to_csv(DB_FILE, index=False)
 
 def load_data():
+    # fillna("") تضمن أن الخانات الفارغة لا تظهر كـ NaN المزعجة
     return pd.read_csv(DB_FILE).fillna("")
 
 def save_data(df_to_save):
@@ -71,68 +73,73 @@ with st.expander("➕ إضافة مهمة جديدة"):
     with st.form("task_form", clear_on_submit=True):
         t_name = st.text_input("اسم المهمة")
         t_member = st.selectbox("تعيين إلى", list(EMAILS_MAP.keys()))
-        t_days = st.number_input("عدد الأيام المتوقعة للإنجاز", min_value=1, step=1)
+        t_days = st.number_input("المدة المتوقعة (بالأيام)", min_value=1, step=1)
         
         if st.form_submit_button("حفظ وإرسال التنبيهات"):
             if t_name:
                 now = datetime.datetime.now()
-                current_date = now.date()
-                current_time = now.strftime("%H:%M:%S")
-                due_date = current_date + datetime.timedelta(days=t_days)
+                due_date = now.date() + datetime.timedelta(days=t_days)
                 
                 new_row = {
-                    "المهمة": t_name, "المسؤول": t_member, 
-                    "تاريخ التسجيل": str(current_date), "وقت الإدخال": current_time, 
-                    "الأيام المتوقعة": t_days, "تاريخ الإنجاز المتوقع": str(due_date),
+                    "المهمة": t_name, 
+                    "المسؤول": t_member, 
+                    "تاريخ البدء": str(now.date()), 
+                    "وقت البدء": now.strftime("%H:%M:%S"), 
+                    "الأيام المتوقعة": t_days, 
+                    "الموعد النهائي": str(due_date),
                     "الحالة": "قيد التنفيذ",
-                    "تاريخ الإنجاز الفعلي": "", "وقت الإنجاز الفعلي": ""
+                    "تاريخ الإنجاز الفعلي": "", 
+                    "وقت الإنجاز الفعلي": ""
                 }
                 
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
-                st.success(f"✅ تم الحفظ! موعد الإنجاز المتوقع: {due_date}")
+                st.success(f"✅ تم الحفظ! الموعد النهائي هو {due_date}")
                 st.rerun()
 
 # --- لوحة المتابعة ---
 st.divider()
 st.subheader("📊 لوحة المتابعة")
+
 if not df.empty:
-    # عرض الجدول مع قفل جميع الأعمدة عدا "الحالة"
+    # عرض الجدول وتفعيل التعديل للحالة فقط
     edited_df = st.data_editor(
         df,
         column_config={
             "المهمة": st.column_config.Column(disabled=True),
             "المسؤول": st.column_config.Column(disabled=True),
-            "تاريخ التسجيل": st.column_config.Column(disabled=True),
-            "وقت الإدخال": st.column_config.Column(disabled=True),
+            "تاريخ البدء": st.column_config.Column(disabled=True),
+            "وقت البدء": st.column_config.Column(disabled=True),
             "الأيام المتوقعة": st.column_config.Column(disabled=True),
-            "تاريخ الإنجاز المتوقع": st.column_config.Column(disabled=True),
-            "الحالة": st.column_config.SelectboxColumn("الحالة", options=["قيد التنفيذ", "مكتمل", "متأخر"], required=True),
+            "الموعد النهائي": st.column_config.Column(disabled=True),
             "تاريخ الإنجاز الفعلي": st.column_config.Column(disabled=True),
             "وقت الإنجاز الفعلي": st.column_config.Column(disabled=True),
+            "الحالة": st.column_config.SelectboxColumn(
+                "الحالة", 
+                options=["قيد التنفيذ", "مكتمل", "متأخر"], 
+                required=True
+            )
         },
         use_container_width=True, num_rows="fixed"
     )
     
-    if st.button("حفظ التغييرات"):
-        # منطق تحديث تاريخ ووقت الإنجاز الفعلي تلقائياً
+    if st.button("تحديث الحالات"):
         now = datetime.datetime.now()
+        # تحديث تلقائي لوقت الإنجاز الفعلي عند اختيار "مكتمل"
         for index, row in edited_df.iterrows():
-            # إذا تغيرت الحالة إلى مكتمل وكانت خانة التاريخ الفعلي فارغة
-            if row["الحالة"] == "مكتمل" and (row["تاريخ الإنجاز الفعلي"] == "" or pd.isna(row["تاريخ الإنجاز الفعلي"])):
+            if row["الحالة"] == "مكتمل" and (row["تاريخ الإنجاز الفعلي"] == ""):
                 edited_df.at[index, "تاريخ الإنجاز الفعلي"] = str(now.date())
                 edited_df.at[index, "وقت الإنجاز الفعلي"] = now.strftime("%H:%M:%S")
-            # إذا أعاد الحالة إلى قيد التنفيذ، نمسح تاريخ الإنجاز
             elif row["الحالة"] == "قيد التنفيذ":
                 edited_df.at[index, "تاريخ الإنجاز الفعلي"] = ""
                 edited_df.at[index, "وقت الإنجاز الفعلي"] = ""
 
         save_data(edited_df)
-        send_email("⚠️ تحديث نظام", f"قام {st.session_state.user_email} بتحديث حالات المهام.", EMAILS_MAP["هويدي الصنقر"])
-        st.success("✅ تم تحديث الحالات وتوثيق وقت الإنجاز الفعلي!")
+        send_email("⚠️ تحديث نظام", f"تعديل جديد بواسطة {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
+        st.success("✅ تم التحديث وتوثيق الوقت الفعلي!")
         st.rerun()
 
-    st.download_button(label="📥 تحميل النسخة الاحتياطية", data=df.to_csv(index=False).encode('utf-8-sig'), 
-                       file_name=f"mawid_tasks_{datetime.date.today()}.csv", mime='text/csv')
+    st.download_button(label="📥 تحميل السجل الكامل", data=df.to_csv(index=False).encode('utf-8-sig'), 
+                       file_name=f"mawid_report_{datetime.date.today()}.csv", mime='text/csv')
 else:
     st.info("لا توجد مهام حالية.")

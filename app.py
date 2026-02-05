@@ -5,7 +5,7 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 
-# --- 1. قائمة الإيميلات المصرح لها بالدخول ---
+# --- 1. إعدادات الأمان والدخول ---
 EMAILS_MAP = {
     "د.عادل الحربي": "adilalharby@gmail.com",
     "بريده المطيري": "buraida990@gmail.com",
@@ -14,23 +14,22 @@ EMAILS_MAP = {
     "المسؤول": "r3-mawid@gmail.com"
 }
 
-# --- 2. نظام تسجيل الدخول ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 تسجيل الدخول لبرنامج موعد")
-    user_email = st.text_input("أدخل بريدك الإلكتروني الشخصي:")
+    st.title("🔐 دخول نظام موعد")
+    u_email = st.text_input("أدخل بريدك الإلكتروني:")
     if st.button("دخول"):
-        if user_email.lower() in [e.lower() for e in EMAILS_MAP.values()]:
+        if u_email.lower() in [e.lower() for e in EMAILS_MAP.values()]:
             st.session_state.authenticated = True
-            st.session_state.user_email = user_email
+            st.session_state.user_email = u_email
             st.rerun()
         else:
-            st.error("البريد غير مسجل، يرجى التواصل مع مسؤول النظام.")
+            st.error("البريد غير مسجل.")
     st.stop()
 
-# --- 3. دالة إرسال الإيميل الآمنة ---
+# --- 2. دالة إرسال الإيميل ---
 def send_email(subject, body, receiver):
     try:
         sender = st.secrets["email_settings"]["sender_email"]
@@ -45,60 +44,49 @@ def send_email(subject, body, receiver):
         return True
     except: return False
 
-# --- 4. الربط مع Google Sheets ---
+# --- 3. الربط مع Google Sheets ---
+# ملاحظة: يستخدم الرابط الموجود في Secrets تحت [gsheets] spreadsheet_url
 conn = st.connection("gsheets", type=GSheetsConnection)
 url = st.secrets["gsheets"]["spreadsheet_url"]
 
-# قراءة البيانات الحالية من الجدول
-df = conn.read(spreadsheet=url, usecols=[0, 1, 2, 3, 4, 5])
+# قراءة البيانات
+df = conn.read(spreadsheet=url)
 
-# --- 5. واجهة التطبيق ---
+# --- 4. واجهة التطبيق ---
 st.title("🩻 نظام إدارة مهام برنامج موعد")
-st.write(f"المستخدم الحالي: {st.session_state.user_email}")
+st.caption(f"متصل بقاعدة بيانات Google Sheets | المستخدم: {st.session_state.user_email}")
 
-# ميزة إضافة مهمة جديدة
+# نموذج الإضافة
 with st.expander("➕ إضافة مهمة جديدة"):
     with st.form("task_form", clear_on_submit=True):
         t_name = st.text_input("اسم المهمة")
         t_member = st.selectbox("تعيين إلى", list(EMAILS_MAP.keys()))
         col1, col2 = st.columns(2)
-        with col1:
-            t_due_date = st.date_input("تاريخ التسليم", datetime.date.today())
-        with col2:
-            t_due_time = st.time_input("وقت التسليم", datetime.time(9, 0))
+        with col1: t_due_date = st.date_input("التاريخ", datetime.date.today())
+        with col2: t_due_time = st.time_input("الوقت", datetime.time(9, 0))
+        t_days = st.number_input("الأيام المتوقعة", min_value=1, step=1)
         
-        t_days = st.number_input("الأيام المتوقعة للإنجاز", min_value=1, step=1)
-        
-        submitted = st.form_submit_button("حفظ المهمة وتنبيه الزملاء")
-        
-        if submitted and t_name:
-            # تجهيز الصف الجديد
-            new_row = pd.DataFrame([{
-                "المهمة": t_name,
-                "المسؤول": t_member,
-                "التاريخ": str(t_due_date),
-                "وقت التسليم": str(t_due_time),
-                "الأيام المتوقعة": t_days,
-                "الحالة": "قيد التنفيذ"
-            }])
-            # تحديث الجدول في جوجل شيتس
-            updated_df = pd.concat([df, new_row], ignore_index=True)
-            conn.update(spreadsheet=url, data=updated_df)
-            
-            # التنبيهات
-            body = f"تم إضافة مهمة جديدة: {t_name}\nالموعد: {t_due_date} الساعة {t_due_time}\nالمدة المتوقعة: {t_days} أيام"
-            send_email("🔔 مهمة جديدة - نظام موعد", body, EMAILS_MAP[t_member])
-            send_email("⚠️ تحديث نظام موعد", f"تم إضافة مهمة من قبل {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
-            
-            st.success("✅ تم حفظ المهمة في Google Sheets وتنبيه الجميع")
-            st.rerun()
+        if st.form_submit_button("حفظ وإرسال تنبيه"):
+            if t_name:
+                new_row = pd.DataFrame([{
+                    "المهمة": t_name, "المسؤول": t_member, 
+                    "التاريخ": str(t_due_date), "وقت التسليم": str(t_due_time), 
+                    "الأيام المتوقعة": t_days, "الحالة": "قيد التنفيذ"
+                }])
+                updated_df = pd.concat([df, new_row], ignore_index=True)
+                conn.update(spreadsheet=url, data=updated_df)
+                
+                # التنبيهات
+                send_email("🔔 مهمة جديدة", f"تم تكليفك بمهمة: {t_name}", EMAILS_MAP[t_member])
+                send_email("⚠️ تحديث نظام", f"إضافة مهمة بواسطة {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
+                st.success("✅ تم الحفظ في Google Sheets وتنبيه الجميع")
+                st.rerun()
 
-# --- 6. لوحة المتابعة (قفل التعديل) ---
+# --- 5. لوحة المتابعة (قفل التعديل) ---
 st.divider()
-st.subheader("📊 لوحة المتابعة وتحديث الحالات")
+st.subheader("📊 المتابعة (تعديل الحالة فقط)")
 
 if not df.empty:
-    # القفل البرمجي: تعديل الحالة فقط
     edited_df = st.data_editor(
         df,
         column_config={
@@ -107,21 +95,15 @@ if not df.empty:
             "التاريخ": st.column_config.Column(disabled=True),
             "وقت التسليم": st.column_config.Column(disabled=True),
             "الأيام المتوقعة": st.column_config.Column(disabled=True),
-            "الحالة": st.column_config.SelectboxColumn(
-                "الحالة",
-                options=["قيد التنفيذ", "مكتمل", "جاري التواصل", "متأخر"],
-                required=True,
-            )
+            "الحالة": st.column_config.SelectboxColumn("الحالة", options=["قيد التنفيذ", "مكتمل", "جاري التواصل", "متأخر"], required=True)
         },
-        use_container_width=True,
-        num_rows="fixed"
+        use_container_width=True, num_rows="fixed"
     )
     
     if st.button("حفظ التغييرات النهائية"):
         conn.update(spreadsheet=url, data=edited_df)
-        # تنبيه هويدي
-        send_email("⚠️ تعديل في حالات المهام", f"قام {st.session_state.user_email} بتحديث حالات المهام.", EMAILS_MAP["هويدي الصنقر"])
-        st.success("✅ تم تحديث جدول جوجل شيتس وتنبيه هويدي")
+        send_email("⚠️ تعديل حالات", f"قام {st.session_state.user_email} بتحديث الجدول.", EMAILS_MAP["هويدي الصنقر"])
+        st.success("✅ تم التحديث بنجاح!")
         st.rerun()
 else:
-    st.info("لا توجد مهام مسجلة في الجدول.")
+    st.info("الجدول فارغ حالياً.")

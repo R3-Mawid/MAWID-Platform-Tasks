@@ -50,10 +50,13 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 url = st.secrets["gsheets"]["spreadsheet_url"]
 
 # قراءة البيانات
-df = conn.read(spreadsheet=url)
+try:
+    df = conn.read(spreadsheet=url, ttl=0) # ttl=0 يضمن قراءة البيانات فوراً دون تأخير
+except:
+    df = pd.DataFrame(columns=["المهمة", "المسؤول", "التاريخ", "وقت التسليم", "الأيام المتوقعة", "الحالة"])
 
 # --- 4. واجهة التطبيق ---
-st.title("🩻 نظام إدارة مهام برنامج موعد")
+st.title(" نظام إدارة مهام برنامج موعد")
 st.caption(f"متصل بقاعدة بيانات Google Sheets | المستخدم: {st.session_state.user_email}")
 
 # نموذج الإضافة
@@ -107,3 +110,4 @@ if not df.empty:
         st.rerun()
 else:
     st.info("الجدول فارغ حالياً.")
+

@@ -30,7 +30,7 @@ if not st.session_state.authenticated:
             st.error("البريد غير مسجل.")
     st.stop()
 
-# --- 3. إدارة البيانات (إضافة العمود الجديد للهيكل) ---
+# --- 3. إدارة البيانات ---
 DB_FILE = "radiology_tasks.csv"
 COLUMNS = ["المهمة", "المسؤول", "تاريخ التسجيل", "وقت الإدخال", "الأيام المتوقعة", "تاريخ الإنجاز المتوقع", "الحالة"]
 
@@ -60,52 +60,55 @@ def send_email(subject, body, receiver):
     except: return False
 
 # --- 5. واجهة التطبيق ---
-st.title(" نظام إدارة مهام برنامج موعد")
+st.title("🩻 نظام إدارة مهام برنامج موعد")
 df = load_data()
 
-# نموذج الإضافة
+# نموذج الإضافة (تم إزالة إدخال التاريخ اليدوي)
 with st.expander("➕ إضافة مهمة جديدة"):
     with st.form("task_form", clear_on_submit=True):
         t_name = st.text_input("اسم المهمة")
         t_member = st.selectbox("تعيين إلى", list(EMAILS_MAP.keys()))
-        col1, col2 = st.columns(2)
-        with col1: t_start_date = st.date_input("تاريخ تسجيل المهمة", datetime.date.today())
-        with col2: t_start_time = st.time_input("وقت إدخال المهمة", datetime.time(9, 0))
+        t_days = st.number_input("عدد الأيام المتوقعة للإنجاز", min_value=1, step=1)
         
-        t_days = st.number_input("الأيام المتوقعة لإنهاء المهمة", min_value=1, step=1)
-        
-        # الحساب التلقائي لتاريخ الإنجاز
-        t_due_date = t_start_date + datetime.timedelta(days=t_days)
-        st.info(f"💡 تاريخ الإنجاز المتوقع سيكون في: {t_due_date}")
-
         if st.form_submit_button("حفظ وإرسال تنبيه"):
             if t_name:
+                # --- التسجيل التلقائي للوقت والتاريخ الآن ---
+                now = datetime.datetime.now()
+                current_date = now.date()
+                current_time = now.strftime("%H:%M:%S")
+                # حساب تاريخ الإنجاز بناءً على تاريخ اليوم تلقائياً
+                due_date = current_date + datetime.timedelta(days=t_days)
+                
                 new_row = {
                     "المهمة": t_name, 
                     "المسؤول": t_member, 
-                    "تاريخ التسجيل": str(t_start_date), 
-                    "وقت الإدخال": str(t_start_time), 
+                    "تاريخ التسجيل": str(current_date), 
+                    "وقت الإدخال": current_time, 
                     "الأيام المتوقعة": t_days, 
-                    "تاريخ الإنجاز المتوقع": str(t_due_date),
+                    "تاريخ الإنجاز المتوقع": str(due_date),
                     "الحالة": "قيد التنفيذ"
                 }
+                
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
                 
-                # تحديث نص الإيميل ليشمل التاريخ المحسوب
-                email_body = f"تم تكليفك بمهمة جديدة:\n\nالمهمة: {t_name}\nتاريخ التسجيل: {t_start_date}\nالأيام المتاحة: {t_days}\nتاريخ الإنجاز النهائي المطلوب: {t_due_date}"
+                # إرسال الإيميل بالتفاصيل التلقائية
+                email_body = (f"تم تكليفك بمهمة جديدة:\n\n"
+                              f"المهمة: {t_name}\n"
+                              f"تاريخ التسجيل التلقائي: {current_date}\n"
+                              f"الأيام المتاحة: {t_days}\n"
+                              f"تاريخ الإنجاز النهائي المطلوب: {due_date}")
                 
                 send_email("🔔 مهمة جديدة - موعد", email_body, EMAILS_MAP[t_member])
                 send_email("⚠️ تحديث نظام", f"تم إضافة مهمة جديدة بواسطة {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
                 
-                st.success(f"✅ تم الحفظ! موعد الإنجاز: {t_due_date}")
+                st.success(f"✅ تم الحفظ تلقائياً! تاريخ الإنجاز: {due_date}")
                 st.rerun()
 
 # --- 6. لوحة المتابعة ---
 st.divider()
 st.subheader("📊 لوحة المتابعة")
 if not df.empty:
-    # قفل جميع الأعمدة عدا الحالة
     edited_df = st.data_editor(
         df,
         column_config={
@@ -126,7 +129,7 @@ if not df.empty:
         st.success("✅ تم تحديث البيانات!")
         st.rerun()
 
-    st.download_button(label="📥 تحميل نسخة احتياطية (Excel/CSV)", data=df.to_csv(index=False).encode('utf-8-sig'), 
+    st.download_button(label="📥 تحميل نسخة احتياطية (CSV)", data=df.to_csv(index=False).encode('utf-8-sig'), 
                        file_name=f"tasks_backup_{datetime.date.today()}.csv", mime='text/csv')
 else:
     st.info("لا توجد مهام حالية.")

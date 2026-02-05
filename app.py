@@ -24,122 +24,74 @@ if not st.session_state.authenticated:
     if st.button("دخول"):
         if u_email.lower() in [e.lower() for e in EMAILS_MAP.values()]:
             st.session_state.authenticated = True
-            st.session_state.user_email = u_email
+            st.session_state.user_email = u_email.lower()
             st.rerun()
         else:
             st.error("البريد غير مسجل.")
     st.stop()
 
-# --- 3. إدارة البيانات (هيكل نظيف بدون تكرار) ---
+# --- 3. إدارة البيانات ---
 DB_FILE = "radiology_tasks.csv"
-# الأعمدة الأساسية فقط
-COLUMNS = [
-    "المهمة", "المسؤول", "تاريخ البدء", "وقت البدء", 
-    "الأيام المتوقعة", "الموعد النهائي", "الحالة",
-    "تاريخ الإنجاز الفعلي", "وقت الإنجاز الفعلي"
-]
+COLUMNS = ["المهمة", "المسؤول", "تاريخ البدء", "وقت البدء", "الأيام المتوقعة", "الموعد النهائي", "الحالة", "تاريخ الإنجاز الفعلي", "وقت الإنجاز الفعلي"]
 
 if not os.path.exists(DB_FILE):
-    df_init = pd.DataFrame(columns=COLUMNS)
-    df_init.to_csv(DB_FILE, index=False)
+    pd.DataFrame(columns=COLUMNS).to_csv(DB_FILE, index=False)
 
 def load_data():
-    # fillna("") تضمن أن الخانات الفارغة لا تظهر كـ NaN المزعجة
     return pd.read_csv(DB_FILE).fillna("")
 
 def save_data(df_to_save):
     df_to_save.to_csv(DB_FILE, index=False)
 
-# --- 4. دالة إرسال الإيميل ---
-def send_email(subject, body, receiver):
-    try:
-        sender = st.secrets["email_settings"]["sender_email"]
-        password = st.secrets["email_settings"]["app_password"]
-        msg = MIMEText(body, 'plain', 'utf-8')
-        msg['Subject'] = subject
-        msg['From'] = sender
-        msg['To'] = receiver
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(sender, password)
-            server.sendmail(sender, receiver, msg.as_string())
-        return True
-    except: return False
-
-# --- 5. واجهة التطبيق ---
+# --- 4. واجهة التطبيق ---
 st.title("🩻 نظام إدارة مهام برنامج موعد")
 df = load_data()
 
+# [قسم إضافة المهمة - يبقى كما هو]
 with st.expander("➕ إضافة مهمة جديدة"):
     with st.form("task_form", clear_on_submit=True):
         t_name = st.text_input("اسم المهمة")
         t_member = st.selectbox("تعيين إلى", list(EMAILS_MAP.keys()))
         t_days = st.number_input("المدة المتوقعة (بالأيام)", min_value=1, step=1)
-        
-        if st.form_submit_button("حفظ وإرسال التنبيهات"):
+        if st.form_submit_button("حفظ وحماية"):
             if t_name:
                 now = datetime.datetime.now()
                 due_date = now.date() + datetime.timedelta(days=t_days)
-                
-                new_row = {
-                    "المهمة": t_name, 
-                    "المسؤول": t_member, 
-                    "تاريخ البدء": str(now.date()), 
-                    "وقت البدء": now.strftime("%H:%M:%S"), 
-                    "الأيام المتوقعة": t_days, 
-                    "الموعد النهائي": str(due_date),
-                    "الحالة": "قيد التنفيذ",
-                    "تاريخ الإنجاز الفعلي": "", 
-                    "وقت الإنجاز الفعلي": ""
-                }
-                
+                new_row = {"المهمة": t_name, "المسؤول": t_member, "تاريخ البدء": str(now.date()), "وقت البدء": now.strftime("%H:%M:%S"), "الأيام المتوقعة": t_days, "الموعد النهائي": str(due_date), "الحالة": "قيد التنفيذ", "تاريخ الإنجاز الفعلي": "", "وقت الإنجاز الفعلي": ""}
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
-                st.success(f"✅ تم الحفظ! الموعد النهائي هو {due_date}")
+                st.success("✅ تم الحفظ")
                 st.rerun()
 
-# --- لوحة المتابعة ---
+# --- 5. لوحة المتابعة (التعديل) ---
 st.divider()
 st.subheader("📊 لوحة المتابعة")
-
 if not df.empty:
-    # عرض الجدول وتفعيل التعديل للحالة فقط
-    edited_df = st.data_editor(
-        df,
-        column_config={
-            "المهمة": st.column_config.Column(disabled=True),
-            "المسؤول": st.column_config.Column(disabled=True),
-            "تاريخ البدء": st.column_config.Column(disabled=True),
-            "وقت البدء": st.column_config.Column(disabled=True),
-            "الأيام المتوقعة": st.column_config.Column(disabled=True),
-            "الموعد النهائي": st.column_config.Column(disabled=True),
-            "تاريخ الإنجاز الفعلي": st.column_config.Column(disabled=True),
-            "وقت الإنجاز الفعلي": st.column_config.Column(disabled=True),
-            "الحالة": st.column_config.SelectboxColumn(
-                "الحالة", 
-                options=["قيد التنفيذ", "مكتمل", "متأخر"], 
-                required=True
-            )
-        },
-        use_container_width=True, num_rows="fixed"
-    )
-    
+    edited_df = st.data_editor(df, use_container_width=True, disabled=["المهمة", "المسؤول", "تاريخ البدء", "وقت البدء", "الأيام المتوقعة", "الموعد النهائي", "تاريخ الإنجاز الفعلي", "وقت الإنجاز الفعلي"])
     if st.button("تحديث الحالات"):
-        now = datetime.datetime.now()
-        # تحديث تلقائي لوقت الإنجاز الفعلي عند اختيار "مكتمل"
-        for index, row in edited_df.iterrows():
-            if row["الحالة"] == "مكتمل" and (row["تاريخ الإنجاز الفعلي"] == ""):
-                edited_df.at[index, "تاريخ الإنجاز الفعلي"] = str(now.date())
-                edited_df.at[index, "وقت الإنجاز الفعلي"] = now.strftime("%H:%M:%S")
-            elif row["الحالة"] == "قيد التنفيذ":
-                edited_df.at[index, "تاريخ الإنجاز الفعلي"] = ""
-                edited_df.at[index, "وقت الإنجاز الفعلي"] = ""
-
         save_data(edited_df)
-        send_email("⚠️ تحديث نظام", f"تعديل جديد بواسطة {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
-        st.success("✅ تم التحديث وتوثيق الوقت الفعلي!")
+        st.success("✅ تم التحديث")
         st.rerun()
 
-    st.download_button(label="📥 تحميل السجل الكامل", data=df.to_csv(index=False).encode('utf-8-sig'), 
-                       file_name=f"mawid_report_{datetime.date.today()}.csv", mime='text/csv')
-else:
-    st.info("لا توجد مهام حالية.")
+# --- 6. لوحة تحكم المسؤول (للحذف) ---
+# تظهر فقط إذا كان المستخدم هو المسؤول r3-mawid@gmail.com
+if st.session_state.user_email == "r3-mawid@gmail.com":
+    st.sidebar.divider()
+    with st.sidebar.expander("🗑️ إدارة وحذف المهام"):
+        st.warning("هذه المنطقة مخصصة للمسؤول فقط")
+        if not df.empty:
+            task_to_delete = st.selectbox("اختر المهمة المراد حذفها:", df["المهمة"].unique())
+            if st.button("حذف المهمة المختارة نهائياً"):
+                df = df[df["المهمة"] != task_to_delete]
+                save_data(df)
+                st.error(f"❌ تم حذف مهمة: {task_to_delete}")
+                st.rerun()
+            
+            if st.button("⚠️ مسح جميع المهام (إفراغ الجدول)"):
+                if st.checkbox("أؤكد رغبتي في مسح قاعدة البيانات بالكامل"):
+                    df = pd.DataFrame(columns=COLUMNS)
+                    save_data(df)
+                    st.success("🧹 تم تنظيف الجدول بالكامل")
+                    st.rerun()
+
+    st.download_button(label="📥 تحميل نسخة احتياطية", data=df.to_csv(index=False).encode('utf-8-sig'), file_name=f"backup_{datetime.date.today()}.csv")

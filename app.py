@@ -26,7 +26,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 دخول نظام موعد")
+    st.title("🔐 دخول نظام ادارة مهام برنامج موعد")
     u_email = st.text_input("أدخل بريدك الإلكتروني:")
     if st.button("دخول"):
         if u_email.lower() in [e.lower() for e in EMAILS_MAP.values()]:
@@ -71,7 +71,7 @@ def send_email(subject, body, receiver):
 
 # --- 6. واجهة التطبيق الرئيسية ---
 st.set_page_config(page_title="نظام مهام موعد", layout="wide")
-st.title("🩻 نظام إدارة مهام برنامج موعد")
+st.title(" نظام إدارة مهام برنامج موعد")
 df = load_data()
 
 with st.expander("➕ إضافة مهمة جديدة"):
@@ -175,3 +175,4 @@ if st.session_state.user_email == "r3-mawid@gmail.com":
         file_name=f"mawid_tasks_{get_ksa_now().date()}.csv",
         mime='text/csv'
     )
+

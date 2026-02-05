@@ -3,10 +3,16 @@ import pandas as pd
 import datetime
 import smtplib
 import os
-import pytz
+import pytz  # مكتبة ضبط المناطق الزمنية لضمان توقيت السعودية
 from email.mime.text import MIMEText
 
-# --- 1. قائمة الإيميلات ---
+# --- 1. إعدادات المنطقة الزمنية (توقيت مكة المكرمة) ---
+KSA = pytz.timezone('Asia/Riyadh')
+
+def get_ksa_now():
+    return datetime.datetime.now(KSA)
+
+# --- 2. قائمة الإيميلات ---
 EMAILS_MAP = {
     "د.عادل الحربي": "adilalharby@gmail.com",
     "بريده المطيري": "buraida990@gmail.com",
@@ -15,12 +21,12 @@ EMAILS_MAP = {
     "المسؤول": "r3-mawid@gmail.com"
 }
 
-# --- 2. نظام تسجيل الدخول ---
+# --- 3. نظام تسجيل الدخول ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔐 صفحة تسجيل الدخول لمهام إدارة موعد")
+    st.title("🔐 دخول نظام موعد")
     u_email = st.text_input("أدخل بريدك الإلكتروني:")
     if st.button("دخول"):
         if u_email.lower() in [e.lower() for e in EMAILS_MAP.values()]:
@@ -31,11 +37,11 @@ if not st.session_state.authenticated:
             st.error("البريد غير مسجل.")
     st.stop()
 
-# --- 3. إدارة البيانات (هيكل نظيف بدون تكرار) ---
+# --- 4. إدارة البيانات (هيكل نظيف بدون تكرار) ---
 DB_FILE = "radiology_tasks.csv"
 COLUMNS = [
     "المهمة", "المسؤول", "تاريخ البدء", "وقت البدء", 
-    "الأيام المتوقعة", "تاريخ الإنجاز المتوقع", "الحالة",
+    "الأيام المتوقعة", "الموعد النهائي", "الحالة",
     "تاريخ الإنجاز الفعلي", "وقت الإنجاز الفعلي"
 ]
 
@@ -48,49 +54,66 @@ def load_data():
 def save_data(df_to_save):
     df_to_save.to_csv(DB_FILE, index=False)
 
-# --- 4. واجهة التطبيق ---
-st.title(" نظام إدارة مهام برنامج موعد")
+# --- 5. دالة إرسال الإيميل ---
+def send_email(subject, body, receiver):
+    try:
+        sender = st.secrets["email_settings"]["sender_email"]
+        password = st.secrets["email_settings"]["app_password"]
+        msg = MIMEText(body, 'plain', 'utf-8')
+        msg['Subject'] = subject
+        msg['From'] = sender
+        msg['To'] = receiver
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender, password)
+            server.sendmail(sender, receiver, msg.as_string())
+        return True
+    except: return False
+
+# --- 6. واجهة التطبيق الرئيسية ---
+st.set_page_config(page_title="نظام مهام موعد", layout="wide")
+st.title("🩻 نظام إدارة مهام برنامج موعد")
 df = load_data()
 
-# نموذج الإضافة المطور
+# نموذج إضافة مهمة جديدة مع حساب تلقائي فوري
 with st.expander("➕ إضافة مهمة جديدة"):
     with st.form("task_form", clear_on_submit=True):
         t_name = st.text_input("اسم المهمة")
         t_member = st.selectbox("تعيين إلى", list(EMAILS_MAP.keys()))
         t_days = st.number_input("عدد الأيام المتوقعة للإنجاز", min_value=1, step=1)
         
-        # الحساب التلقائي يظهر هنا للمستخدم
-        expected_date = datetime.date.today() + datetime.timedelta(days=t_days)
-        st.write(f"📅 موعد الإنجاز المتوقع: **{expected_date}**")
+        # حساب التاريخ المتوقع بناءً على توقيت السعودية الآن
+        expected_date = get_ksa_now().date() + datetime.timedelta(days=t_days)
+        st.info(f"📅 الموعد النهائي المتوقع سيكون في: **{expected_date}**")
         
         if st.form_submit_button("حفظ وإرسال التنبيهات"):
             if t_name:
-                # ضبط التوقيت على مكة المكرمة
-KSA = pytz.timezone('Asia/Riyadh')
-now = datetime.datetime.now(KSA)
-current_date = now.date()
-current_time = now.strftime("%I:%M:%S %p") # سيعطيك الوقت بنظام 12 ساعة (AM/PM)
+                now_ksa = get_ksa_now()
                 new_row = {
                     "المهمة": t_name, 
                     "المسؤول": t_member, 
-                    "تاريخ البدء": str(now.date()), 
-                    "وقت البدء": now.strftime("%H:%M:%S"), 
+                    "تاريخ البدء": str(now_ksa.date()), 
+                    "وقت البدء": now_ksa.strftime("%I:%M:%S %p"), 
                     "الأيام المتوقعة": t_days, 
-                    "تاريخ الإنجاز المتوقع": str(expected_date),
+                    "الموعد النهائي": str(expected_date),
                     "الحالة": "قيد التنفيذ",
                     "تاريخ الإنجاز الفعلي": "", 
                     "وقت الإنجاز الفعلي": ""
                 }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
+                
+                # إرسال تنبيهات بريدية
+                email_content = f"مهمة جديدة: {t_name}\nالموعد النهائي: {expected_date}"
+                send_email("🔔 مهمة جديدة", email_content, EMAILS_MAP[t_member])
+                send_email("⚠️ إحاطة", f"أضاف {st.session_state.user_email} مهمة جديدة لـ {t_member}", EMAILS_MAP["هويدي الصنقر"])
+                
                 st.success(f"✅ تم الحفظ! الموعد المتوقع: {expected_date}")
                 st.rerun()
 
-# --- 5. لوحة المتابعة ---
+# --- 7. لوحة المتابعة (الجدول) ---
 st.divider()
-st.subheader("📊 لوحة المتابعة")
+st.subheader("📊 لوحة المتابعة المباشرة")
 if not df.empty:
-    # عرض الجدول وتأمين الأعمدة
     edited_df = st.data_editor(
         df,
         column_config={
@@ -99,7 +122,7 @@ if not df.empty:
             "تاريخ البدء": st.column_config.Column(disabled=True),
             "وقت البدء": st.column_config.Column(disabled=True),
             "الأيام المتوقعة": st.column_config.Column(disabled=True),
-            "تاريخ الإنجاز المتوقع": st.column_config.Column(disabled=True),
+            "الموعد النهائي": st.column_config.Column(disabled=True),
             "تاريخ الإنجاز الفعلي": st.column_config.Column(disabled=True),
             "وقت الإنجاز الفعلي": st.column_config.Column(disabled=True),
             "الحالة": st.column_config.SelectboxColumn("الحالة", options=["قيد التنفيذ", "مكتمل", "متأخر"], required=True)
@@ -108,36 +131,43 @@ if not df.empty:
     )
     
     if st.button("تحديث وحفظ الحالات"):
-        # ضبط التوقيت على مكة المكرمة
-KSA = pytz.timezone('Asia/Riyadh')
-now = datetime.datetime.now(KSA)
-current_date = now.date()
-current_time = now.strftime("%I:%M:%S %p") # سيعطيك الوقت بنظام 12 ساعة (AM/PM)
+        now_ksa = get_ksa_now()
         for index, row in edited_df.iterrows():
-            if row["الحالة"] == "مكتمل" and row["تاريخ الإنجاز الفعلي"] == "":
-                edited_df.at[index, "تاريخ الإنجاز الفعلي"] = str(now.date())
-                edited_df.at[index, "وقت الإنجاز الفعلي"] = now.strftime("%H:%M:%S")
+            # إذا أصبحت مكتملة ولم يسجل وقت سابق، سجل الآن
+            if row["الحالة"] == "مكتمل" and (row["تاريخ الإنجاز الفعلي"] == "" or pd.isna(row["تاريخ الإنجاز الفعلي"])):
+                edited_df.at[index, "تاريخ الإنجاز الفعلي"] = str(now_ksa.date())
+                edited_df.at[index, "وقت الإنجاز الفعلي"] = now_ksa.strftime("%I:%M:%S %p")
+            # إذا عادت لقيد التنفيذ، امسح التوقيت الفعلي
             elif row["الحالة"] == "قيد التنفيذ":
                 edited_df.at[index, "تاريخ الإنجاز الفعلي"] = ""
                 edited_df.at[index, "وقت الإنجاز الفعلي"] = ""
         
         save_data(edited_df)
-        st.success("✅ تم توثيق الإنجاز الفعلي!")
+        st.success("✅ تم تحديث الحالات وتوثيق الوقت الفعلي بتوقيت الرياض.")
         st.rerun()
 
-# --- 6. لوحة المسؤول (الحذف) ---
+# --- 8. لوحة المسؤول (القائمة الجانبية) ---
 if st.session_state.user_email == "r3-mawid@gmail.com":
-    st.sidebar.title("🛠️ لوحة المسؤول")
-    with st.sidebar.expander("🗑️ حذف المهام"):
+    st.sidebar.title("🛠️ لوحة تحكم المسؤول")
+    with st.sidebar.expander("🗑️ إدارة المهام والحذف"):
         if not df.empty:
-            to_delete = st.selectbox("اختر مهمة لحذفها:", df["المهمة"].tolist())
-            if st.button("حذف نهائي"):
-                df = df[df["المهمة"] != to_delete]
+            to_del = st.selectbox("اختر مهمة لحذفها:", df["المهمة"].tolist())
+            if st.button("حذف المهمة المختارة"):
+                df = df[df["المهمة"] != to_del]
                 save_data(df)
-                st.error(f"تم حذف {to_delete}")
                 st.rerun()
+            
+            st.divider()
+            if st.button("⚠️ مسح جميع البيانات (إفراغ الجدول)"):
+                if st.checkbox("أؤكد رغبتي في الحذف الكامل"):
+                    pd.DataFrame(columns=COLUMNS).to_csv(DB_FILE, index=False)
+                    st.rerun()
     
-    st.sidebar.download_button("📥 تحميل النسخة الاحتياطية", df.to_csv(index=False).encode('utf-8-sig'), f"mawid_tasks_{datetime.date.today()}.csv")
-
-
-
+    st.sidebar.download_button(
+        label="📥 تحميل النسخة الاحتياطية (CSV)",
+        data=df.to_csv(index=False).encode('utf-8-sig'),
+        file_name=f"mawid_tasks_{get_ksa_now().date()}.csv",
+        mime='text/csv'
+    )
+else:
+    st.info("مرحباً بك! يمكنك تحديث حالة مهامك فقط.")

@@ -58,7 +58,7 @@ def send_email(subject, body, receiver):
     except: return False
 
 # --- 5. واجهة التطبيق ---
-st.title("🩻 نظام إدارة مهام برنامج موعد")
+st.title(" نظام إدارة مهام برنامج موعد")
 df = load_data()
 
 # نموذج الإضافة
@@ -67,9 +67,9 @@ with st.expander("➕ إضافة مهمة جديدة"):
         t_name = st.text_input("اسم المهمة")
         t_member = st.selectbox("تعيين إلى", list(EMAILS_MAP.keys()))
         col1, col2 = st.columns(2)
-        with col1: t_due_date = st.date_input("التاريخ", datetime.date.today())
-        with col2: t_due_time = st.time_input("الوقت", datetime.time(9, 0))
-        t_days = st.number_input("الأيام المتوقعة", min_value=1, step=1)
+        with col1: t_due_date = st.date_input("تاريخ تسجيل المهمة", datetime.date.today())
+        with col2: t_due_time = st.time_input("وقت أدخال المهمة", datetime.time(9, 0))
+        t_days = st.number_input(" الأيام المتوقعة لانهاء المهمة", min_value=1, step=1)
         
         if st.form_submit_button("حفظ وإرسال تنبيه"):
             if t_name:
@@ -110,3 +110,4 @@ if not df.empty:
                        file_name=f"tasks_backup_{datetime.date.today()}.csv", mime='text/csv')
 else:
     st.info("لا توجد مهام.")
+

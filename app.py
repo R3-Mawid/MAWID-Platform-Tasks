@@ -63,20 +63,18 @@ def send_email(subject, body, receiver):
 st.title("🩻 نظام إدارة مهام برنامج موعد")
 df = load_data()
 
-# نموذج الإضافة (تم إزالة إدخال التاريخ اليدوي)
 with st.expander("➕ إضافة مهمة جديدة"):
     with st.form("task_form", clear_on_submit=True):
         t_name = st.text_input("اسم المهمة")
         t_member = st.selectbox("تعيين إلى", list(EMAILS_MAP.keys()))
         t_days = st.number_input("عدد الأيام المتوقعة للإنجاز", min_value=1, step=1)
         
-        if st.form_submit_button("حفظ وإرسال تنبيه"):
+        if st.form_submit_button("حفظ وإرسال التنبيهات"):
             if t_name:
-                # --- التسجيل التلقائي للوقت والتاريخ الآن ---
+                # تسجيل الوقت والتاريخ الحالي تلقائياً
                 now = datetime.datetime.now()
                 current_date = now.date()
                 current_time = now.strftime("%H:%M:%S")
-                # حساب تاريخ الإنجاز بناءً على تاريخ اليوم تلقائياً
                 due_date = current_date + datetime.timedelta(days=t_days)
                 
                 new_row = {
@@ -92,20 +90,26 @@ with st.expander("➕ إضافة مهمة جديدة"):
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
                 
-                # إرسال الإيميل بالتفاصيل التلقائية
-                email_body = (f"تم تكليفك بمهمة جديدة:\n\n"
-                              f"المهمة: {t_name}\n"
-                              f"تاريخ التسجيل التلقائي: {current_date}\n"
-                              f"الأيام المتاحة: {t_days}\n"
-                              f"تاريخ الإنجاز النهائي المطلوب: {due_date}")
+                # إرسال الإيميلات
+                email_body = (f"تفاصيل المهمة المسجلة:\n\n"
+                              f"اسم المهمة: {t_name}\n"
+                              f"المسؤول عنها: {t_member}\n"
+                              f"تاريخ التسجيل: {current_date}\n"
+                              f"وقت الإدخال: {current_time}\n"
+                              f"المدة المحددة: {t_days} أيام\n"
+                              f"تاريخ الإنجاز المطلوب: {due_date}")
                 
-                send_email("🔔 مهمة جديدة - موعد", email_body, EMAILS_MAP[t_member])
-                send_email("⚠️ تحديث نظام", f"تم إضافة مهمة جديدة بواسطة {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
+                # 1. تنبيه للشخص المكلف
+                send_email("🔔 مهمة جديدة مكلف بها", email_body, EMAILS_MAP[t_member])
+                # 2. تنبيه لهويدي
+                send_email("⚠️ إحاطة: مهمة جديدة في النظام", f"قام {st.session_state.user_email} بإضافة مهمة جديدة.\n\n{email_body}", EMAILS_MAP["هويدي الصنقر"])
+                # 3. تنبيه لك (المسؤول)
+                send_email("✅ تم تأكيد حفظ المهمة", f"تم تسجيل المهمة التالية بنجاح في قاعدة البيانات:\n\n{email_body}", EMAILS_MAP["المسؤول"])
                 
-                st.success(f"✅ تم الحفظ تلقائياً! تاريخ الإنجاز: {due_date}")
+                st.success(f"✅ تم الحفظ وتنبيه جميع الأطراف. موعد الإنجاز: {due_date}")
                 st.rerun()
 
-# --- 6. لوحة المتابعة ---
+# --- لوحة المتابعة ---
 st.divider()
 st.subheader("📊 لوحة المتابعة")
 if not df.empty:
@@ -125,11 +129,11 @@ if not df.empty:
     
     if st.button("حفظ التغييرات"):
         save_data(edited_df)
-        send_email("⚠️ تعديل حالات", f"قام {st.session_state.user_email} بتحديث الحالات.", EMAILS_MAP["هويدي الصنقر"])
-        st.success("✅ تم تحديث البيانات!")
+        send_email("⚠️ تحديث حالات المهام", f"قام {st.session_state.user_email} بتحديث حالات العمل في الجدول.", EMAILS_MAP["هويدي الصنقر"])
+        st.success("✅ تم تحديث البيانات بنجاح!")
         st.rerun()
 
-    st.download_button(label="📥 تحميل نسخة احتياطية (CSV)", data=df.to_csv(index=False).encode('utf-8-sig'), 
-                       file_name=f"tasks_backup_{datetime.date.today()}.csv", mime='text/csv')
+    st.download_button(label="📥 تحميل النسخة الاحتياطية", data=df.to_csv(index=False).encode('utf-8-sig'), 
+                       file_name=f"mawid_backup_{datetime.date.today()}.csv", mime='text/csv')
 else:
     st.info("لا توجد مهام حالية.")

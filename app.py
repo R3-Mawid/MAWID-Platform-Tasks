@@ -5,24 +5,24 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 
-# --- دالة إرسال الإيميل الآمنة ---
+# --- 1. دالة إرسال الإيميل الآمنة ---
 def send_email(task_name, assignee, due_date):
-    # هنا نقوم بجلب البيانات من Secrets بدلاً من كتابتها في الكود
     try:
         sender = st.secrets["email_settings"]["sender_email"]
         password = st.secrets["email_settings"]["app_password"]
         
-        # مصفوفة إيميلات الزملاء (يمكنك تحديثها بإيميلاتهم الحقيقية)
-        emails = {
+        # خريطة الإيميلات (هنا قمنا بربط كل اسم بإيميله الحقيقي)
+        emails_map = {
             "د.عادل الحربي": "adilalharby@gmail.com",
             "بريده المطيري": "buraida990@gmail.com",
             "منى العتيبي": "muna@example.com",
             "هويدي الصنقر": "hwidii@gmail.com"
         }
-        receiver = emails.get(assignee, sender) # إذا لم يجد الإيميل يرسل لنفسه
         
-        msg = MIMEText(f"مرحباً {assignee}، تم تكليفك بمهمة: {task_name}. الموعد النهائي: {due_date}")
-        msg['Subject'] = 'تنبيه مهمة جديدة - برنامج موعد'
+        receiver = emails_map.get(assignee, sender)
+        
+        msg = MIMEText(f"مرحباً {assignee}، تم تكليفك بمهمة جديدة في نظام موعد: {task_name}. الموعد النهائي: {due_date}")
+        msg['Subject'] = '🔔 تنبيه مهمة جديدة - برنامج موعد'
         msg['From'] = sender
         msg['To'] = receiver
 
@@ -33,40 +33,51 @@ def send_email(task_name, assignee, due_date):
     except Exception as e:
         return False
 
-# --- إدارة قاعدة البيانات البسيطة (CSV) ---
+# --- 2. إدارة قاعدة البيانات (CSV) ---
 if not os.path.exists("tasks.csv"):
     df_init = pd.DataFrame(columns=["المهمة", "المسؤول", "الموعد النهائي", "الحالة"])
     df_init.to_csv("tasks.csv", index=False)
 
-# --- واجهة التطبيق ---
-st.set_page_config(page_title="نظام موعد", page_icon="📅")
+# --- 3. واجهة التطبيق ---
+st.set_page_config(page_title="نظام موعد الذكي", page_icon="📅")
 st.title("🩻 نظام إدارة مهام برنامج موعد")
 
+# نموذج الإضافة
 with st.form("task_form", clear_on_submit=True):
     st.subheader("➕ إضافة مهمة جديدة")
     t_name = st.text_input("اسم المهمة")
     t_member = st.selectbox("المسؤول", ["د.عادل الحربي", "بريده المطيري", "منى العتيبي", "هويدي الصنقر"])
     t_due = st.date_input("الموعد النهائي المتوقع", datetime.date.today())
     
-    submitted = st.form_submit_button("إضافة المهمة وتنبيه الزميل")
+    submitted = st.form_submit_button("إرسال التنبيه وحفظ المهمة")
     
     if submitted:
         if t_name:
-            # حفظ المهمة في الملف
-            new_data = pd.DataFrame([[t_name, t_member, t_due, "قيد التنفيذ"]], 
-                                    columns=["المهمة", "المسؤول", "الموعد النهائي", "الحالة"])
-            new_data.to_csv("tasks.csv", mode='a', header=False, index=False)
+            # حفظ في CSV
+            new_row = [t_name, t_member, str(t_due), "قيد التنفيذ"]
+            df_new = pd.DataFrame([new_row], columns=["المهمة", "المسؤول", "الموعد النهائي", "الحالة"])
+            df_new.to_csv("tasks.csv", mode='a', header=False, index=False)
             
-            # محاولة إرسال الإيميل
+            # إرسال الإيميل الحقيقي
             if send_email(t_name, t_member, t_due):
-                st.success(f"✅ تم حفظ المهمة وإرسال إيميل لـ {t_member}")
+                st.success(f"✅ تم الحفظ وإرسال إيميل إلى: {t_member}")
             else:
-                st.warning("✅ تم حفظ المهمة، ولكن فشل إرسال الإيميل (تأكد من إعدادات Secrets)")
+                st.warning("✅ تم حفظ المهمة، ولكن تعذر إرسال الإيميل (تأكد من إعدادات Secrets)")
         else:
             st.error("يرجى كتابة اسم المهمة")
 
-# --- عرض المهام من الملف ---
+# --- 4. لوحة المتابعة التفاعلية ---
 st.divider()
-st.subheader("📊 جدول متابعة المهام الحقيقي")
-df_display = pd.read_csv("tasks.csv")
-st.dataframe(df_display, use_container_width=True)
+st.subheader("📊 لوحة متابعة سير العمل (تفاعلية)")
+if os.path.exists("tasks.csv"):
+    df_display = pd.read_csv("tasks.csv")
+    if not df_display.empty:
+        # جدول يسمح بتعديل الحالة مباشرة
+        edited_df = st.data_editor(df_display, use_container_width=True)
+        
+        if st.button("حفظ التغييرات في الجدول"):
+            edited_df.to_csv("tasks.csv", index=False)
+            st.success("✅ تم تحديث البيانات بنجاح!")
+            st.rerun()
+    else:
+        st.info("لا توجد مهام حالياً.")

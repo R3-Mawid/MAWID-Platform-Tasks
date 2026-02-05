@@ -1,11 +1,11 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import datetime
 import smtplib
+import os
 from email.mime.text import MIMEText
 
-# --- 1. إعدادات الأمان والدخول ---
+# --- 1. قائمة الإيميلات ---
 EMAILS_MAP = {
     "د.عادل الحربي": "adilalharby@gmail.com",
     "بريده المطيري": "buraida990@gmail.com",
@@ -14,6 +14,7 @@ EMAILS_MAP = {
     "المسؤول": "r3-mawid@gmail.com"
 }
 
+# --- 2. نظام تسجيل الدخول ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -29,7 +30,19 @@ if not st.session_state.authenticated:
             st.error("البريد غير مسجل.")
     st.stop()
 
-# --- 2. دالة إرسال الإيميل ---
+# --- 3. إدارة البيانات (ملف محلي آمن) ---
+DB_FILE = "radiology_tasks.csv"
+if not os.path.exists(DB_FILE):
+    df_init = pd.DataFrame(columns=["المهمة", "المسؤول", "التاريخ", "وقت التسليم", "الأيام المتوقعة", "الحالة"])
+    df_init.to_csv(DB_FILE, index=False)
+
+def load_data():
+    return pd.read_csv(DB_FILE)
+
+def save_data(df_to_save):
+    df_to_save.to_csv(DB_FILE, index=False)
+
+# --- 4. دالة إرسال الإيميل ---
 def send_email(subject, body, receiver):
     try:
         sender = st.secrets["email_settings"]["sender_email"]
@@ -44,20 +57,9 @@ def send_email(subject, body, receiver):
         return True
     except: return False
 
-# --- 3. الربط مع Google Sheets ---
-# ملاحظة: يستخدم الرابط الموجود في Secrets تحت [gsheets] spreadsheet_url
-conn = st.connection("gsheets", type=GSheetsConnection)
-url = st.secrets["gsheets"]["spreadsheet_url"]
-
-# قراءة البيانات
-try:
-    df = conn.read(spreadsheet=url, ttl=0) # ttl=0 يضمن قراءة البيانات فوراً دون تأخير
-except:
-    df = pd.DataFrame(columns=["المهمة", "المسؤول", "التاريخ", "وقت التسليم", "الأيام المتوقعة", "الحالة"])
-
-# --- 4. واجهة التطبيق ---
-st.title(" نظام إدارة مهام برنامج موعد")
-st.caption(f"متصل بقاعدة بيانات Google Sheets | المستخدم: {st.session_state.user_email}")
+# --- 5. واجهة التطبيق ---
+st.title("🩻 نظام إدارة مهام برنامج موعد")
+df = load_data()
 
 # نموذج الإضافة
 with st.expander("➕ إضافة مهمة جديدة"):
@@ -71,24 +73,18 @@ with st.expander("➕ إضافة مهمة جديدة"):
         
         if st.form_submit_button("حفظ وإرسال تنبيه"):
             if t_name:
-                new_row = pd.DataFrame([{
-                    "المهمة": t_name, "المسؤول": t_member, 
-                    "التاريخ": str(t_due_date), "وقت التسليم": str(t_due_time), 
-                    "الأيام المتوقعة": t_days, "الحالة": "قيد التنفيذ"
-                }])
-                updated_df = pd.concat([df, new_row], ignore_index=True)
-                conn.update(spreadsheet=url, data=updated_df)
-                
-                # التنبيهات
+                new_row = {"المهمة": t_name, "المسؤول": t_member, "التاريخ": str(t_due_date), 
+                           "وقت التسليم": str(t_due_time), "الأيام المتوقعة": t_days, "الحالة": "قيد التنفيذ"}
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                save_data(df)
                 send_email("🔔 مهمة جديدة", f"تم تكليفك بمهمة: {t_name}", EMAILS_MAP[t_member])
                 send_email("⚠️ تحديث نظام", f"إضافة مهمة بواسطة {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
-                st.success("✅ تم الحفظ في Google Sheets وتنبيه الجميع")
+                st.success("✅ تم الحفظ بنجاح!")
                 st.rerun()
 
-# --- 5. لوحة المتابعة (قفل التعديل) ---
+# --- 6. لوحة المتابعة ---
 st.divider()
-st.subheader("📊 المتابعة (تعديل الحالة فقط)")
-
+st.subheader("📊 المتابعة")
 if not df.empty:
     edited_df = st.data_editor(
         df,
@@ -98,16 +94,19 @@ if not df.empty:
             "التاريخ": st.column_config.Column(disabled=True),
             "وقت التسليم": st.column_config.Column(disabled=True),
             "الأيام المتوقعة": st.column_config.Column(disabled=True),
-            "الحالة": st.column_config.SelectboxColumn("الحالة", options=["قيد التنفيذ", "مكتمل", "جاري التواصل", "متأخر"], required=True)
+            "الحالة": st.column_config.SelectboxColumn("الحالة", options=["قيد التنفيذ", "مكتمل", "متأخر"], required=True)
         },
         use_container_width=True, num_rows="fixed"
     )
     
-    if st.button("حفظ التغييرات النهائية"):
-        conn.update(spreadsheet=url, data=edited_df)
-        send_email("⚠️ تعديل حالات", f"قام {st.session_state.user_email} بتحديث الجدول.", EMAILS_MAP["هويدي الصنقر"])
-        st.success("✅ تم التحديث بنجاح!")
+    if st.button("حفظ التغييرات"):
+        save_data(edited_df)
+        send_email("⚠️ تعديل حالات", f"تعديل بواسطة {st.session_state.user_email}", EMAILS_MAP["هويدي الصنقر"])
+        st.success("✅ تم التحديث!")
         st.rerun()
-else:
-    st.info("الجدول فارغ حالياً.")
 
+    # زر إضافي لك كمسؤول لتحميل البيانات كإكسل لضمان عدم ضياعها
+    st.download_button(label="📥 تحميل نسخة احتياطية (Excel/CSV)", data=df.to_csv(index=False).encode('utf-8-sig'), 
+                       file_name=f"tasks_backup_{datetime.date.today()}.csv", mime='text/csv')
+else:
+    st.info("لا توجد مهام.")

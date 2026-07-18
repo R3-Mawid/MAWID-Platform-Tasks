@@ -55,10 +55,10 @@ def save_data(df_to_save):
     df_to_save.to_csv(DB_FILE, index=False)
 
 
-# --- 5. دالة إرسال الإيميل الكاشفة بدون حجب أخطاء ---
+# --- 5. دالة إرسال الإيميل المباشرة للتجربة ---
 def send_email(subject, body, receiver):
-    sender = st.secrets["email_settings"]["sender_email"]
-    password = st.secrets["email_settings"]["app_password"]
+    sender = "r3-mawid@gmail.com"
+    password = "ضع_الـ16_حرفاً_الجديدة_هنا_مباشرة" # اكتبها هنا بين علامات التنصيص مباشرة بدلاً من استدعائها من الـ secrets
     msg = MIMEText(body, 'plain', 'utf-8')
     msg['Subject'] = subject
     msg['From'] = sender

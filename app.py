@@ -54,7 +54,8 @@ def load_data():
 def save_data(df_to_save):
     df_to_save.to_csv(DB_FILE, index=False)
 
-# --- 5. دالة إرسال الإيميل ---
+
+# --- 5. دالة إرسال الإيميل المطورة لكشف الأخطاء ---
 def send_email(subject, body, receiver):
     try:
         sender = st.secrets["email_settings"]["sender_email"]
@@ -67,7 +68,10 @@ def send_email(subject, body, receiver):
             server.login(sender, password)
             server.sendmail(sender, receiver, msg.as_string())
         return True
-    except: return False
+    except Exception as e:
+        # هذا السطر سيظهر لك سبب المشكلة الحقيقي بلون أحمر على الشاشة فوراً
+        st.error(f"❌ فشل إرسال الإيميل إلى {receiver}. السبب التقني: {e}")
+        return False
 
 # --- 6. واجهة التطبيق الرئيسية ---
 st.set_page_config(page_title="نظام مهام موعد", layout="wide")

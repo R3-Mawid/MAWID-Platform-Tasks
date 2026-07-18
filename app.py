@@ -111,10 +111,23 @@ with st.expander("➕ إضافة مهمة جديدة"):
                 df = pd.concat([df, new_df], ignore_index=True)
                 save_data(df)
                 
-                # التنبيهات
-                email_content = f"مهمة جديدة: {t_name}\nالموعد النهائي: {final_expected_date}"
-                send_email("🔔 مهمة جديدة", email_content, EMAILS_MAP[t_member])
-                send_email("⚠️ إحاطة", f"أضاف {st.session_state.user_email} مهمة جديدة لـ {t_member}", EMAILS_MAP["هويدي الصنقر"])
+  # --- تحديث نص التنبيهات لتبدو رسمية وتتجاوز الفلاتر ---
+                subject_user = f"📋 مهمة جديدة مسندة إليك: {t_name}"
+                email_content_user = (
+                    f"السلام عليكم ورحمة الله وبركاته،\n\n"
+                    f"تم إسناد مهمة جديدة لكم في نظام موعد:\n"
+                    f"🔹 اسم المهمة: {t_name}\n"
+                    f"🔹 الموعد النهائي للإنجاز: {final_expected_date}\n\n"
+                    f"يرجى الدخول للنظام لمتابعة التحديثات.\n"
+                    f"دمتم بخير."
+                )
+
+                subject_admin = f"⚠️ إشعار إداري: إضافة مهمة جديدة"
+                email_content_admin = f"تم إضافة مهمة جديدة بواسطة ({st.session_state.user_email}) للمسؤول ({t_member})."
+
+                # إرسال الإيميلات المحدثة
+                send_email(subject_user, email_content_user, EMAILS_MAP[t_member])
+                send_email(subject_admin, email_content_admin, EMAILS_MAP["هويدي الصنقر"])
                 
                 st.success(f"✅ تم تسجيل المهمة بنجاح بموعد نهائي: {final_expected_date}")
                 st.rerun()

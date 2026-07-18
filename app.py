@@ -55,26 +55,20 @@ def save_data(df_to_save):
     df_to_save.to_csv(DB_FILE, index=False)
 
 
-
-# --- 5. دالة إرسال الإيميل المطورة عبر بورت TLS 587 ---
+# --- 5. دالة إرسال الإيميل الكاشفة بدون حجب أخطاء ---
 def send_email(subject, body, receiver):
-    try:
-        sender = st.secrets["email_settings"]["sender_email"]
-        password = st.secrets["email_settings"]["app_password"]
-        msg = MIMEText(body, 'plain', 'utf-8')
-        msg['Subject'] = subject
-        msg['From'] = sender
-        msg['To'] = receiver
-        
-        # استخدام منفذ 587 وتفعيل ترقية الأمان STARTTLS
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls() # تهيئة الاتصال الآمن
-            server.login(sender, password)
-            server.sendmail(sender, receiver, msg.as_string())
-        return True
-    except Exception as e:
-        st.error(f"❌ فشل إرسال الإيميل إلى {receiver}. السبب التقني: {e}")
-        return False
+    sender = st.secrets["email_settings"]["sender_email"]
+    password = st.secrets["email_settings"]["app_password"]
+    msg = MIMEText(body, 'plain', 'utf-8')
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = receiver
+    
+    with smtplib.SMTP('smtp.gmail.com', 587) as server:
+        server.starttls()
+        server.login(sender, password)
+        server.sendmail(sender, receiver, msg.as_string())
+    return True
 
 # --- 6. واجهة التطبيق الرئيسية ---
 st.set_page_config(page_title="نظام مهام موعد", layout="wide")

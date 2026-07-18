@@ -17,7 +17,7 @@ EMAILS_MAP = {
     "د.عادل الحربي": "adilalharby@gmail.com",
     "بريده المطيري": "buraida990@gmail.com",
     "منى العتيبي": "muna@example.com",
-    "هويدي الصنقر": "hwidii@gmail.com",
+    "هويدي الصنقر": "halsanqer@moh.gov.sa",
     "المسؤول": "r3-mawid@gmail.com"
 }
 

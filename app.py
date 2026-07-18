@@ -55,7 +55,8 @@ def save_data(df_to_save):
     df_to_save.to_csv(DB_FILE, index=False)
 
 
-# --- 5. دالة إرسال الإيميل المطورة لكشف الأخطاء ---
+
+# --- 5. دالة إرسال الإيميل المطورة عبر بورت TLS 587 ---
 def send_email(subject, body, receiver):
     try:
         sender = st.secrets["email_settings"]["sender_email"]
@@ -64,12 +65,14 @@ def send_email(subject, body, receiver):
         msg['Subject'] = subject
         msg['From'] = sender
         msg['To'] = receiver
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        
+        # استخدام منفذ 587 وتفعيل ترقية الأمان STARTTLS
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls() # تهيئة الاتصال الآمن
             server.login(sender, password)
             server.sendmail(sender, receiver, msg.as_string())
         return True
     except Exception as e:
-        # هذا السطر سيظهر لك سبب المشكلة الحقيقي بلون أحمر على الشاشة فوراً
         st.error(f"❌ فشل إرسال الإيميل إلى {receiver}. السبب التقني: {e}")
         return False
 
